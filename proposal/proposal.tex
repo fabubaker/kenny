@@ -1,0 +1,59 @@
+\documentclass{article}
+
+\title{Slipstream: Adaptive Co-Scheduling for Heterogenous Web Workloads}
+\author{Fadhil Abubaker}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Motivation}
+
+Present-day web servers process thousands of requests per second, each with
+strict response times. Studies have shown that the average user will abandon a
+web page if the load time is more than 3 seconds. Hence, web applications
+typically use background jobs to process long-running requests, as well as tasks
+that are latency-insensitive. Executing background jobs involves a message
+queue for queuing jobs, and a worker pool for processing them. Workers are
+distributed across multiple nodes to support high-load scenarios. Fig 1 shows an
+example of a web application that uses Celery, a popular message queue for
+queuing jobs, with Celery workers running on multiple nodes.
+
+An optimization metric in such a scenario is job throughput, defined as the
+number of jobs processed per unit of time. Ideally, the rate of job processing
+must at least match the rate of job arrival. Increasing job throughput typically
+equates to spawning more workers, which in turn increases the number of jobs
+that can be processed. However, care must be taken to spawn the right number of
+workers on the given hardware. Eagerly spawning workers can lead to
+over-utilization of hardware resources, which can worsen job completion times
+and throughput. On the other hand, conservatively spawning workers can lead to
+under-utilization, leaving performance improvements on the table.
+
+The optimal number of workers to spawn is a function of workload
+characteristics. If incoming jobs are CPU-bound, then the number of workers to
+spawn per node is equal to the number of CPU cores on the node. If incoming jobs
+are I/O-bound, then the number of workers to spawn per node is correlated with
+the capacity of the I/O sub-system (NIC bandwidth, disk bandwidth, etc). Fig 2
+shows throughput degradation on a node with four cores as a function of the
+number of workers.
+
+In practice, however, web workloads are heterogenous as they involve a mix of
+both CPU and I/O bound jobs. For eg, an application could have jobs for training
+models for learning user preferences (CPU-bound), as well as jobs that aggregate
+data from multiple APIs (I/O-bound). One observation for maximizing the
+throughput of such workloads is that CPU-bound jobs can be co-scheduled with
+I/O-bound tasks, since both jobs use complementary resources. However, it is not
+always possible to predict the workload characteristics of a job and schedule it
+accordingly. In the worst case, CPU-bound jobs could be scheduled together,
+resulting in contention for CPU resources. Similarly, IO-bound jobs could be
+scheduled together, resulting in contention for IO.
+
+To solve this issue, we present Slipstream, a scheduler for web workloads that
+can adaptively schedule jobs to workers. Slipstream does this by attempting to
+co-schedule CPU-bound and I/O-bound jobs together. It does so by learning the
+workload patterns of jobs as they are processed through the system. It then uses
+these learned patterns to optimally schedule jobs to workers.
+
+\section{Methodology}
+
+\end{document}
