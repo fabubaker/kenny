@@ -9,19 +9,18 @@
 
 \section{Motivation}
 
-Present-day web servers process thousands of requests per second, each with
+Present-day web applications process thousands of requests per second, each with
 strict response times. Studies have shown that the average user will abandon a
 web page if the load time is more than 3 seconds. Hence, web applications
 typically use background jobs to process long-running requests, as well as tasks
-that are latency-insensitive. Executing background jobs involves a message
-queue for queuing jobs, and a worker pool for processing them. Workers are
-distributed across multiple nodes to support high-load scenarios. Fig 1 shows an
-example of a web application that uses Celery, a popular message queue for
-queuing jobs, with Celery workers running on multiple nodes.
+that are non-user-facing. Executing background jobs involves a message queue for
+queuing jobs, and a worker pool for processing them. Workers are distributed
+across multiple nodes to support high-load scenarios. Figure 1 shows an example
+of a web application that uses Celery, a popular message queue for queuing jobs,
+with Celery workers running on multiple nodes.
 
 An optimization metric in such a scenario is job throughput, defined as the
-number of jobs processed per unit of time. Ideally, the rate of job processing
-must at least match the rate of job arrival. Increasing job throughput typically
+number of jobs processed per unit of time. Increasing job throughput typically
 equates to spawning more workers, which in turn increases the number of jobs
 that can be processed. However, care must be taken to spawn the right number of
 workers on the given hardware. Eagerly spawning workers can lead to
@@ -31,29 +30,47 @@ under-utilization, leaving performance improvements on the table.
 
 The optimal number of workers to spawn is a function of workload
 characteristics. If incoming jobs are CPU-bound, then the number of workers to
-spawn per node is equal to the number of CPU cores on the node. If incoming jobs
-are I/O-bound, then the number of workers to spawn per node is correlated with
-the capacity of the I/O sub-system (NIC bandwidth, disk bandwidth, etc). Fig 2
-shows throughput degradation on a node with four cores as a function of the
-number of workers.
+spawn per node is equal to the number of CPU cores on the node\footnote{This
+assumes that jobs are single-threaded. This is a fair assumption, since most web
+applications are written using frameworks in interpreted languages such as
+Python and Ruby that use a global interpreter lock (GIL).}. If incoming jobs are
+I/O-bound, then the number of workers to spawn per node is correlated with the
+capacity of the I/O sub-system. Figure 2 shows throughput degradation on a node
+with four cores as a function of the number of workers, for both types of
+workloads.
 
-In practice, however, web workloads are heterogenous as they involve a mix of
-both CPU and I/O bound jobs. For eg, an application could have jobs for training
+In practice, however, web workloads are heterogenous: they involve a mix of both
+CPU and I/O-bound jobs. For example, an application could have jobs for training
 models for learning user preferences (CPU-bound), as well as jobs that aggregate
 data from multiple APIs (I/O-bound). One observation for maximizing the
 throughput of such workloads is that CPU-bound jobs can be co-scheduled with
-I/O-bound tasks, since both jobs use complementary resources. However, it is not
-always possible to predict the workload characteristics of a job and schedule it
-accordingly. In the worst case, CPU-bound jobs could be scheduled together,
-resulting in contention for CPU resources. Similarly, IO-bound jobs could be
-scheduled together, resulting in contention for IO.
+I/O-bound jobs, since they use complementary resources.
 
-To solve this issue, we present Slipstream, a scheduler for web workloads that
-can adaptively schedule jobs to workers. Slipstream does this by attempting to
-co-schedule CPU-bound and I/O-bound jobs together. It does so by learning the
-workload patterns of jobs as they are processed through the system. It then uses
-these learned patterns to optimally schedule jobs to workers.
+Using this observation, we build Slipstream, a scheduler for web workloads that
+can adaptively co-schedule jobs to workers. Slipstream consists of two
+components:
+\begin{enumerate}
+  \item An estimation model that can quantify the CPU and I/O characteristics of
+  incoming jobs.
+  \item A scheduling policy that uses the above estimation to spawn the optimal
+  number of workers and assign jobs to them.
+\end{enumerate}
 
 \section{Methodology}
+
+We will build Slipstream on top of RQ, a Python library that uses Redis for
+queueing jobs and executing them on workers. Slipstream will run as an
+independent service that monitors the job queue, spawns workers, assigns jobs
+and profiles job execution to learn the characteristics of its workload. At
+first, a conservative number of workers will be spawned. Gradually, as the
+system learns the workload characteristics of each job, more workers will be
+spawned and jobs will be assigned to them using a workload-aware scheduling policy.
+
+To evaluate Slipstream, we will use jobs with varying inputs that emulate the
+mixed workloads seen in a typical web application such as machine-learning and
+data-gathering jobs. We then compare it against static scheduling policies that
+allocate a fixed number of workers to each node. The expectation is that
+Slipstream will exhibit greater throughput due to more effective utilization of
+resources.
 
 \end{document}
