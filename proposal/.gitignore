@@ -7,4 +7,5 @@
 *.pdf
 *.synctex.gz
 *.bbl
-
+*.bcf
+*.xml

@@ -19,20 +19,20 @@ Present-day web applications process thousands of requests per second, each with
 strict response times. Studies have shown that the average user will abandon a
 web page if the load time is more than 3 seconds \cite{Akamai}. Hence, web
 applications typically use background jobs to process long-running requests, as
-well as tasks that are non-user-facing. Executing background jobs involves a
-message queue for queuing jobs, and a worker pool for processing them. Workers
-are distributed across multiple nodes to support high-load scenarios. Figure 1
-shows an example of a web application that uses Celery \cite{Celery}, a popular
+well as any non-user-facing tasks. Executing background jobs involves a message
+queue for queuing jobs, and a worker pool for processing them. Workers are
+distributed across multiple nodes to support high-load scenarios. Figure 1 shows
+an example of a web application that uses Celery \cite{Celery}, a popular
 message queue for queuing jobs, with Celery workers running on multiple nodes.
 
-An optimization metric in such a scenario is job throughput, defined as the
-number of jobs processed per unit of time. Increasing job throughput typically
-equates to spawning more workers, which in turn increases the number of jobs
-that can be processed. However, care must be taken to spawn the right number of
-workers on the given hardware. Eagerly spawning workers can lead to
-over-utilization of hardware resources, which can worsen job completion times
-and throughput. On the other hand, conservatively spawning workers can lead to
-under-utilization, leaving performance improvements on the table.
+An optimization metric in such a scenario is makespan, defined as the length of
+time taken to complete a set of jobs. Increasing makespan typically equates to
+spawning more workers, which in turn increases the number of jobs that can be
+processed. However, care must be taken to spawn the right number of workers on
+the given hardware. Eagerly spawning workers can lead to over-utilization of
+hardware resources, which can worsen job completion times. On the other hand,
+conservatively spawning workers can lead to under-utilization, leaving
+performance improvements on the table.
 
 \begin{figure}
   \includegraphics[width=\linewidth]{celery-diagram.png}
@@ -46,23 +46,23 @@ assumes that jobs are single-threaded. This is a fair assumption, since most web
 applications are written using frameworks in interpreted languages such as
 Python and Ruby that use a global interpreter lock (GIL).}. If incoming jobs are
 I/O-bound, then the number of workers to spawn per node is correlated with the
-capacity of the I/O sub-system. Figure 2 shows throughput degradation on a node
-with four cores as the number of workers are increased, for both types of
+capacity of the I/O sub-system. Figure 2 shows makespan degradation on a node
+with four cores as the number of jobs are increased, for both types of
 workloads.
 
 \begin{figure}
   \centering
   \subfloat[CPU-bound jobs]{{\includegraphics[width=5cm]{CPU-bound.png} }}%
   \qquad
-  \subfloat[IO-bound jobs]{{\includegraphics[width=5cm]{IO-bound.png} }}%
-  \caption{Throughput degradation vs number of workers on a node with four cores.}%
+  \subfloat[I/O-bound jobs]{{\includegraphics[width=5cm]{IO-bound.png} }}%
+  \caption{Makespan degradation vs number of jobs on a node with four cores.}%
   \label{fig:example}%
 \end{figure}
 
 In practice, however, web workloads are heterogenous: they involve a mix of both
 CPU and I/O-bound jobs. For example, an application could have jobs for training
 models for learning user preferences (CPU-bound), as well as jobs that aggregate
-data from multiple APIs (I/O-bound). One observation for maximizing throughput
+data from multiple APIs (I/O-bound). One observation for maximizing makespan
 of such workloads is that CPU-bound jobs can be co-scheduled with I/O-bound
 jobs, since they use complementary resources \cite{10.1109/TPDS.2003.1206505}.
 
@@ -98,7 +98,7 @@ To evaluate Slipstream, we will use jobs with varying inputs that emulate the
 mixed workloads seen in a typical web application such as machine-learning and
 data-gathering jobs. We then compare it against static scheduling policies that
 allocate a fixed number of workers to each node. The expectation is that
-Slipstream will exhibit greater throughput due to more effective utilization of
+Slipstream will exhibit better makespan due to more effective utilization of
 resources.
 
 \printbibliography
