@@ -1,0 +1,68 @@
+\documentclass{proc}
+
+\usepackage[backend=biber, style=trad-abbrv]{biblatex}
+\usepackage{graphicx}
+\usepackage{subfig}
+
+\addbibresource{references.bib}
+
+\title{High Availability For Persistent Key-Value Stores Using Checkpoint/Restore}
+\author{Fadhil Abubaker, Hussain Sadiq Abuwala}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Motivation}
+
+High availability (HA) is an important requirement for modern distributed
+systems. HA is achieved through replication, where multiple replicas of the
+system are run on different nodes for redundancy. Updates made to one replica
+are propagated to the others in a synchronous or asynchronous manner.
+Additionally, replication can be active-active, where any replica can accept
+updates or active-passive, where only a master replica can accept updates
+\cite{Dangers}. Thus, the failure of one replica does not affect the operation
+of the entire system, as another replica can take its place, and continue
+serving requests.
+
+However, implementing HA within a distributed system is a challenging task. As
+mentioned in \cite{RemusDB}, to build a simple active-standby replication into a
+DBMS, the system has to implement propagating updates from the active replica to
+the standby, coordinate transactions between the replicas and ensure atomic
+handover from active to standby in the face of a failure. Moreover, these
+components have to be carefully implemented so as to have minimal impact on the
+performance of the underlying system.
+
+Given the complexity of implementing HA, the question arises whether it should
+be pushed outside of the system. One such approach that has been studied is
+virtual machine (VM) replication, where changes made to a primary VM are
+propagated to a secondary VM \cite{Hypervisor, Remus, Scales2010TheDA}. Prior
+work has also looked at how to adapt datastores to run on such VMs to guarantee
+HA \cite{RemusDB}.
+
+In this paper, we present a HA technique for persistent key-value stores using
+container-based checkpoint/restore. Our approach is similar to VM replication,
+except the granularity of replication is at the container-level, rather than the
+VM-level. With the widespread adoption of containers for modern-day computing,
+this technique can be applied to any datastore running in the cloud.
+
+\section{Methodology}
+
+We design and build a simple persistent key-value store that uses
+checkpoint/restore for active-standby replication. The key-value store supports
+two operations in its API: \texttt{Set(key, value)} and \texttt{Get(key)}. We
+will use CRIU \cite{CRIU}, a Linux-based tool that can be used to checkpoint and
+restore containers/processes.
+
+To evaluate our system, we will use a modified version of the YCSB benchmark
+\cite{YCSB} suited for the API of our key-value store. One of the unique
+advantages of our replication technique is "hot failover", where the standby
+replica retains the state of the in-memory data structures of the active
+replica. This allows the standby replica to keep serving requests while
+exploiting the temporal locality of prior requests served by the active replica.
+We also evaluate the performance benefits of this behavior by measuring the
+latency of requests before and after failover.
+
+\printbibliography
+
+\end{document}
