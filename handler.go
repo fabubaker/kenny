@@ -28,6 +28,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		value = string(body)
 		h.store.Put(key, value)
+	case "DELETE":
+		value = h.store.Delete(key)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
