@@ -1,5 +1,5 @@
 ## Running
 
 ```
-go run kenny.go store.go handler.go
+go run server/main.go
 ```
