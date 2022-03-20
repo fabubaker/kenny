@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 
@@ -17,6 +18,12 @@ func main() {
 		Store: store,
 	}
 
-	log.Println("Starting server...")
-	http.ListenAndServe(":8080", handler)
+	portPtr := flag.String("port", "8080", "Port to listen on")
+
+	flag.Parse()
+
+	address := ":" + *portPtr
+
+	log.Printf("Starting server @ %s", address)
+	http.ListenAndServe(address, handler)
 }
