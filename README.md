@@ -1,5 +1,8 @@
 ## Running
 
+### Running the server
+
 ```
-go run server/main.go
+go build -o server ./server/server.go
+./server/server
 ```
