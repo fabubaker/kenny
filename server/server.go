@@ -25,5 +25,5 @@ func main() {
 	address := ":" + *portPtr
 
 	log.Printf("Starting server @ %s", address)
-	http.ListenAndServe(address, handler)
+	log.Fatal(http.ListenAndServe(address, handler))
 }
