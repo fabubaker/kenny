@@ -1,20 +1,20 @@
-package main
+package store
 
 type Store struct {
-	table map[string]string
+	Table map[string]string
 }
 
 func (store *Store) Get(key string) string {
-	return store.table[key]
+	return store.Table[key]
 }
 
 func (store *Store) Put(key, value string) {
-	store.table[key] = value
+	store.Table[key] = value
 }
 
 func (store *Store) Delete(key string) string {
-	value := store.table[key]
-	delete(store.table, key)
+	value := store.Table[key]
+	delete(store.Table, key)
 
 	return value
 }

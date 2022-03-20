@@ -1,14 +1,16 @@
-package main
+package handler
 
 import (
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+
+	"github.com/fabubaker/kenny/server/store"
 )
 
 type Handler struct {
-	store *Store
+	Store *store.Store
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -17,7 +19,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	switch req.Method {
 	case "GET":
-		value = h.store.Get(key)
+		value = h.Store.Get(key)
 		fmt.Fprintf(w, "%s", value)
 	case "PUT":
 		body, err := ioutil.ReadAll(req.Body)
@@ -27,9 +29,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 
 		value = string(body)
-		h.store.Put(key, value)
+		h.Store.Put(key, value)
 	case "DELETE":
-		value = h.store.Delete(key)
+		value = h.Store.Delete(key)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
