@@ -6,13 +6,11 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/fabubaker/kenny/server/replicator"
 	"github.com/fabubaker/kenny/server/store"
 )
 
 type Handler struct {
-	Store      *store.Store
-	Replicator *replicator.Replicator
+	Store *store.Store
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
