@@ -53,8 +53,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		h.Store.Delete(key)
 
 		w.WriteHeader(http.StatusOK)
+	case "POST":
+		if key == "/heartbeat" {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
