@@ -7,30 +7,19 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"time"
 )
 
 type handler struct {
-	activeIP    string
+	activeAddr  string
 	activeProxy *httputil.ReverseProxy
 
-	standbyIP    string
+	standbyAddr  string
 	standbyProxy *httputil.ReverseProxy
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// Promote requests are handled as a special case
-	if req.Method == "POST" && req.RequestURI == "/promote" {
-		log.Printf("Received request to promote %s as active!", h.standbyIP)
-
-		h.activeIP = h.standbyIP
-		h.activeProxy = h.standbyProxy
-
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	// Everything else is forwarded to the active server
-	log.Printf("Forwarding %s %s to: %s", req.Method, req.RequestURI, h.activeIP)
+	log.Printf("Forwarding %s %s to: %s", req.Method, req.RequestURI, h.activeAddr)
 	h.activeProxy.ServeHTTP(w, req)
 }
 
@@ -43,25 +32,35 @@ func NewProxy(targetHost string) (*httputil.ReverseProxy, error) {
 	return httputil.NewSingleHostReverseProxy(url), nil
 }
 
+func (h *handler) CheckHeartbeat() {
+	log.Println("Checking heartbeat...")
+	resp, err := http.Post(h.activeAddr+"/heartbeat", "application/json", nil)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		log.Printf("Heartbeat timed out, promoting %s to active!", h.standbyAddr)
+	}
+
+	time.AfterFunc(5*time.Second, h.CheckHeartbeat)
+}
+
 // Usage: ./rproxy <IP of active server> <IP of passive server>
 func main() {
-	activeIP := os.Args[1]
-	standbyIP := os.Args[2]
+	activeAddr := os.Args[1]
+	standbyAddr := os.Args[2]
 
-	activeProxy, err := NewProxy(activeIP)
+	activeProxy, err := NewProxy(activeAddr)
 	if err != nil {
 		panic(err)
 	}
-	standbyProxy, err := NewProxy(standbyIP)
+	standbyProxy, err := NewProxy(standbyAddr)
 	if err != nil {
 		panic(err)
 	}
 
 	handler := &handler{
-		activeIP:    activeIP,
+		activeAddr:  activeAddr,
 		activeProxy: activeProxy,
 
-		standbyIP:    standbyIP,
+		standbyAddr:  standbyAddr,
 		standbyProxy: standbyProxy,
 	}
 
@@ -72,8 +71,8 @@ func main() {
 	address := ":" + *portPtr
 
 	log.Printf("Starting rproxy @ %s", address)
-	log.Printf("Active replica: %s", activeIP)
-	log.Printf("Standby replica: %s", standbyIP)
-
+	log.Printf("Active replica: %s", activeAddr)
+	log.Printf("Standby replica: %s", standbyAddr)
+	time.AfterFunc(5*time.Second, handler.CheckHeartbeat)
 	log.Fatal(http.ListenAndServe(address, handler))
 }
