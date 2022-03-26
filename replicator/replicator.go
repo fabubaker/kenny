@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
-	"strconv"
+	"time"
 
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"google.golang.org/protobuf/proto"
@@ -15,10 +14,11 @@ import (
 
 type Replicator struct {
 	addr *net.UnixAddr
-	opts *rpc.CriuOpts
+	mReq []byte
+	pid  int
 }
 
-func MakeReplicator(socketPath string, checkpointDir string) (*Replicator, error) {
+func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicator, error) {
 	addr, err := net.ResolveUnixAddr("unixpacket", socketPath)
 	if err != nil {
 		return nil, err
@@ -30,6 +30,7 @@ func MakeReplicator(socketPath string, checkpointDir string) (*Replicator, error
 	}
 
 	opts := &rpc.CriuOpts{
+		Pid:          proto.Int32(int32(pid)),
 		LogLevel:     proto.Int32(4),
 		LogFile:      proto.String("dump.log"),
 		LeaveRunning: proto.Bool(true),
@@ -38,28 +39,10 @@ func MakeReplicator(socketPath string, checkpointDir string) (*Replicator, error
 		TcpClose:     proto.Bool(true),
 	}
 
-	return &Replicator{
-		addr: addr,
-		opts: opts,
-	}, nil
-}
-
-func (r *Replicator) Checkpoint(w http.ResponseWriter, httpreq *http.Request) {
-	log.Printf("Received %v", httpreq)
-
-	pidStr := httpreq.URL.Query().Get("pid")
-	pid, err := strconv.Atoi(pidStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	pidAddr := proto.Int32(int32(pid))
-	r.opts.Pid = pidAddr
-
 	t := rpc.CriuReqType_DUMP
 	req := rpc.CriuReq{
 		Type: &t,
-		Opts: r.opts,
+		Opts: opts,
 	}
 
 	mReq, err := proto.Marshal(&req)
@@ -67,13 +50,22 @@ func (r *Replicator) Checkpoint(w http.ResponseWriter, httpreq *http.Request) {
 		log.Fatal(err)
 	}
 
+	return &Replicator{
+		addr: addr,
+		mReq: mReq,
+	}, nil
+}
+
+func (r *Replicator) Checkpoint() {
+	log.Printf("Checkpointing...")
+
 	socket, err := net.DialUnix("unixpacket", nil, r.addr)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Make a dump request to the CRIU service
-	_, err = socket.Write(mReq)
+	_, err = socket.Write(r.mReq)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -98,21 +90,23 @@ func (r *Replicator) Checkpoint(w http.ResponseWriter, httpreq *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	time.AfterFunc(500*time.Millisecond, r.Checkpoint)
 }
 
 func main() {
+	pidPtr := flag.Int("pid", 0, "PID of the process to checkpoint")
 	portPtr := flag.String("port", "9090", "Port to listen on")
 	flag.Parse()
 
+	pid := *pidPtr
 	address := ":" + *portPtr
 
-	replicator, err := MakeReplicator("/tmp/kenny.sock", "/tmp/kenny/checkpoint")
+	replicator, err := MakeReplicator("/tmp/kenny.sock", "/tmp/kenny/checkpoint", pid)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Printf("Starting server @ %s", address)
-	http.HandleFunc("/checkpoint", replicator.Checkpoint)
-	log.Fatal(http.ListenAndServe(address, nil))
+	log.Printf("Starting replicator @ %s", address)
+	timer := time.AfterFunc(500*time.Millisecond, replicator.Checkpoint)
+	<-timer.C // Block forever here
 }
