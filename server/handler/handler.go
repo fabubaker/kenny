@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"strconv"
 
 	"github.com/fabubaker/kenny/server/store"
 )
@@ -52,5 +55,23 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) Checkpoint(replicatorAddr string) {
+	log.Printf("Checkpointing to %s", replicatorAddr)
+
+	base, err := url.Parse(replicatorAddr + "/checkpoint")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	params := url.Values{}
+	params.Add("pid", strconv.Itoa(os.Getpid()))
+	base.RawQuery = params.Encode()
+
+	_, err = http.Post(base.String(), "application/json", nil)
+	if err != nil {
+		log.Println(err)
 	}
 }
