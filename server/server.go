@@ -11,7 +11,7 @@ import (
 
 func main() {
 	store := &store.Store{
-		Table: make(map[string]string),
+		Table: make(map[string]map[string]string),
 	}
 
 	handler := &handler.Handler{
