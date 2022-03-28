@@ -16,13 +16,17 @@ type Handler struct {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	key := req.RequestURI
+	key := req.URL.Path
 
 	switch req.Method {
 	case "GET":
 		var fields []string
 
-		err := json.NewDecoder(req.Body).Decode(&fields)
+		queryMap, err := url.ParseQuery(req.URL.RawQuery)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fields = queryMap["fields"]
 
 		if err != nil {
 			log.Fatal(err)

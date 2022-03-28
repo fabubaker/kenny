@@ -7,6 +7,10 @@ type Store struct {
 func (store *Store) Get(key string, fields []string) map[string]string {
 	subset := make(map[string]string)
 
+	if len(fields) == 0 {
+		return store.Table[key]
+	}
+
 	for _, field := range fields {
 		value, ok := store.Table[key][field]
 		if ok {
