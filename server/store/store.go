@@ -8,7 +8,12 @@ func (store *Store) Get(key string, fields []string) map[string]string {
 	subset := make(map[string]string)
 
 	if len(fields) == 0 {
-		return store.Table[key]
+		value, ok := store.Table[key]
+		if !ok {
+			return map[string]string{}
+		} else {
+			return value
+		}
 	}
 
 	for _, field := range fields {
