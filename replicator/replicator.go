@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 type Replicator struct {
 	addr *net.UnixAddr
 	mReq []byte
-	pid  int
 }
 
 func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicator, error) {
@@ -107,6 +107,6 @@ func main() {
 	}
 
 	log.Printf("Starting replicator @ %s", address)
-	timer := time.AfterFunc(500*time.Millisecond, replicator.Checkpoint)
-	<-timer.C // Block forever here
+	time.AfterFunc(500*time.Millisecond, replicator.Checkpoint)
+	log.Fatal(http.ListenAndServe(address, nil))
 }
