@@ -10,12 +10,16 @@ import (
 	"time"
 )
 
-type handler struct {
-	activeAddr  string
-	activeProxy *httputil.ReverseProxy
+const CHECKPOINT_INTERVAL = 2
 
-	standbyAddr  string
-	standbyProxy *httputil.ReverseProxy
+type handler struct {
+	activeAddr           string
+	activeReplicatorAddr string
+	activeProxy          *httputil.ReverseProxy
+
+	standbyAddr           string
+	standbyReplicatorAddr string
+	standbyProxy          *httputil.ReverseProxy
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -34,18 +38,31 @@ func NewProxy(targetHost string) (*httputil.ReverseProxy, error) {
 
 func (h *handler) CheckHeartbeat() {
 	log.Println("Checking heartbeat...")
+
 	resp, err := http.Post(h.activeAddr+"/heartbeat", "application/json", nil)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		log.Printf("Heartbeat timed out, promoting %s to active!", h.standbyAddr)
+		log.Printf("Heartbeat timed out, restoring and promoting %s to active!", h.standbyAddr)
+
+		resp, err = http.Post(h.standbyReplicatorAddr+"/restore", "application/json", nil)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			log.Fatal("Unable to restore standby replica!")
+		}
+
+		// Swap the active and standby
+		h.activeAddr, h.standbyAddr = h.standbyAddr, h.activeAddr
+		h.activeReplicatorAddr, h.standbyReplicatorAddr = h.standbyReplicatorAddr, h.activeReplicatorAddr
+		h.activeProxy, h.standbyProxy = h.standbyProxy, h.activeProxy
 	}
 
-	time.AfterFunc(5*time.Second, h.CheckHeartbeat)
+	time.AfterFunc(CHECKPOINT_INTERVAL*time.Second, h.CheckHeartbeat)
 }
 
-// Usage: ./rproxy <IP of active server> <IP of passive server>
+// Usage: ./rproxy <IP of active server> <IP of active replicator> <IP of standby server> <IP of standby replicator>
 func main() {
 	activeAddr := os.Args[1]
-	standbyAddr := os.Args[2]
+	activeReplicatorAddr := os.Args[2]
+	standbyAddr := os.Args[3]
+	standbyReplicatorAddr := os.Args[4]
 
 	activeProxy, err := NewProxy(activeAddr)
 	if err != nil {
@@ -57,14 +74,16 @@ func main() {
 	}
 
 	handler := &handler{
-		activeAddr:  activeAddr,
-		activeProxy: activeProxy,
+		activeAddr:           activeAddr,
+		activeReplicatorAddr: activeReplicatorAddr,
+		activeProxy:          activeProxy,
 
-		standbyAddr:  standbyAddr,
-		standbyProxy: standbyProxy,
+		standbyAddr:           standbyAddr,
+		standbyReplicatorAddr: standbyReplicatorAddr,
+		standbyProxy:          standbyProxy,
 	}
 
-	portPtr := flag.String("port", "8080", "Port to listen on")
+	portPtr := flag.String("port", "10000", "Port to listen on")
 
 	flag.Parse()
 
@@ -73,6 +92,6 @@ func main() {
 	log.Printf("Starting rproxy @ %s", address)
 	log.Printf("Active replica: %s", activeAddr)
 	log.Printf("Standby replica: %s", standbyAddr)
-	time.AfterFunc(5*time.Second, handler.CheckHeartbeat)
+	time.AfterFunc(CHECKPOINT_INTERVAL*time.Second, handler.CheckHeartbeat)
 	log.Fatal(http.ListenAndServe(address, handler))
 }
