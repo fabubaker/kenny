@@ -14,8 +14,8 @@ import (
 )
 
 type Replicator struct {
-	addr *net.UnixAddr
-	mReq []byte
+	criuAddr *net.UnixAddr
+	mReq     []byte
 }
 
 func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicator, error) {
@@ -51,15 +51,15 @@ func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicat
 	}
 
 	return &Replicator{
-		addr: addr,
-		mReq: mReq,
+		criuAddr: addr,
+		mReq:     mReq,
 	}, nil
 }
 
 func (r *Replicator) Checkpoint() {
 	log.Printf("Checkpointing...")
 
-	socket, err := net.DialUnix("unixpacket", nil, r.addr)
+	socket, err := net.DialUnix("unixpacket", nil, r.criuAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
