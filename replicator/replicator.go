@@ -14,8 +14,9 @@ import (
 )
 
 type Replicator struct {
-	criuAddr *net.UnixAddr
-	mReq     []byte
+	criuAddr   *net.UnixAddr
+	dumpReq    []byte
+	restoreReq []byte
 }
 
 func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicator, error) {
@@ -29,7 +30,8 @@ func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicat
 		return nil, err
 	}
 
-	opts := &rpc.CriuOpts{
+	// Generate a marshaled dump request
+	dumpOpts := &rpc.CriuOpts{
 		Pid:          proto.Int32(int32(pid)),
 		LogLevel:     proto.Int32(4),
 		LogFile:      proto.String("dump.log"),
@@ -39,33 +41,51 @@ func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicat
 		TcpClose:     proto.Bool(true),
 	}
 
-	t := rpc.CriuReqType_DUMP
-	req := rpc.CriuReq{
-		Type: &t,
-		Opts: opts,
+	dumpType := rpc.CriuReqType_DUMP
+	dumpReq := rpc.CriuReq{
+		Type: &dumpType,
+		Opts: dumpOpts,
 	}
 
-	mReq, err := proto.Marshal(&req)
+	mDumpReq, err := proto.Marshal(&dumpReq)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Generate a marshaled restore request
+	restoreOpts := &rpc.CriuOpts{
+		LogLevel:    proto.Int32(4),
+		LogFile:     proto.String("restore.log"),
+		ImagesDirFd: proto.Int32(int32(dir.Fd())),
+		ShellJob:    proto.Bool(true),
+		TcpClose:    proto.Bool(true),
+	}
+
+	restoreType := rpc.CriuReqType_RESTORE
+	restoreReq := rpc.CriuReq{
+		Type: &restoreType,
+		Opts: restoreOpts,
+	}
+
+	mRestoreReq, err := proto.Marshal(&restoreReq)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	return &Replicator{
-		criuAddr: addr,
-		mReq:     mReq,
+		criuAddr:   addr,
+		dumpReq:    mDumpReq,
+		restoreReq: mRestoreReq,
 	}, nil
 }
 
-func (r *Replicator) Checkpoint() {
-	log.Printf("Checkpointing...")
-
+func (r *Replicator) sendAndRecv(msg []byte) {
 	socket, err := net.DialUnix("unixpacket", nil, r.criuAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Make a dump request to the CRIU service
-	_, err = socket.Write(r.mReq)
+	_, err = socket.Write(msg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -89,17 +109,43 @@ func (r *Replicator) Checkpoint() {
 		)
 		return
 	}
+}
+
+func (r *Replicator) Checkpoint() {
+	log.Printf("Checkpointing...")
+
+	r.sendAndRecv(r.dumpReq)
 
 	time.AfterFunc(500*time.Millisecond, r.Checkpoint)
+}
+
+func (r *Replicator) Restore() {
+	log.Printf("Restoring...")
+
+	r.sendAndRecv(r.restoreReq)
+}
+
+func (r *Replicator) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Received request: %s", req.URL.Path)
+
+	switch req.URL.Path {
+	case "/restore":
+		r.Restore()
+		w.WriteHeader(http.StatusOK)
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
 }
 
 func main() {
 	pidPtr := flag.Int("pid", 0, "PID of the process to checkpoint")
 	portPtr := flag.String("port", "9090", "Port to listen on")
+	activePtr := flag.Bool("active", true, "Run in active mode")
 	flag.Parse()
 
 	pid := *pidPtr
 	address := ":" + *portPtr
+	active := *activePtr
 
 	replicator, err := MakeReplicator("/tmp/kenny.sock", "/tmp/kenny/checkpoint", pid)
 	if err != nil {
@@ -107,6 +153,8 @@ func main() {
 	}
 
 	log.Printf("Starting replicator @ %s", address)
-	time.AfterFunc(500*time.Millisecond, replicator.Checkpoint)
-	log.Fatal(http.ListenAndServe(address, nil))
+	if active {
+		time.AfterFunc(500*time.Millisecond, replicator.Checkpoint)
+	}
+	log.Fatal(http.ListenAndServe(address, replicator))
 }
