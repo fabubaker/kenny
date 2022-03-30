@@ -1,0 +1,61 @@
+\documentclass[draft]{proc}
+
+\usepackage[backend=biber, style=trad-abbrv]{biblatex}
+\usepackage[margin=1in, includeheadfoot]{geometry}
+\usepackage{libertine}
+\usepackage{titling}
+
+\setlength{\droptitle}{-5em}
+\pagestyle{plain}
+
+\addbibresource{references.bib}
+
+\title{High Availability For Key-Value Stores Using Checkpoint/Restore}
+\author{Fadhil Abubaker, Hussain Sadiq Abuwala}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+High availability (HA) is an important requirement for modern distributed
+systems. HA is achieved through replication, where multiple replicas of the
+system are run on different nodes for redundancy. Updates made to one replica
+are propagated to the others in a synchronous or asynchronous manner.
+Additionally, replication can be active-active, where any replica can accept
+updates or active-passive, where only a master replica can accept updates
+\cite{Dangers}. Thus, the failure of one replica does not affect the operation
+of the entire system, as another replica can take its place, and continue
+serving requests.
+
+However, implementing HA within a distributed system is a challenging task. As
+mentioned in \cite{RemusDB}, to build a simple active-standby replication into a
+DBMS, the system has to implement propagating updates from the active replica to
+the standby, coordinate transactions between the replicas and ensure atomic
+handover from active to standby in the face of a failure. Moreover, these
+components have to be carefully implemented so as to have minimal impact on the
+performance of the underlying system.
+
+Given the complexity of implementing HA, the question arises whether it should
+be pushed outside of the system. One such approach that has been studied is
+virtual machine (VM) replication, where changes made to a primary VM are
+propagated to a secondary VM \cite{Hypervisor, Remus, Scales2010TheDA}. Prior
+work has also looked at how to adapt datastores to run on such VMs to guarantee
+HA \cite{RemusDB}.
+
+In this paper, we present a HA technique for key-value stores using
+container-based checkpoint/restore. Our approach is similar to VM replication,
+except the granularity of replication is at the container-level, rather than the
+VM-level. With the widespread adoption of containers for modern-day computing,
+this technique can be applied to any datastore running in the cloud.
+
+\section{System Architecture}
+
+\section{Evaluation}
+
+\section{Conclusion}
+
+\printbibliography
+
+\end{document}
