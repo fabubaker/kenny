@@ -13,6 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const CHECKPOINT_INTERVAL_MS = 500
+
 type Replicator struct {
 	criuAddr   *net.UnixAddr
 	dumpReq    []byte
@@ -154,7 +156,7 @@ func main() {
 
 	log.Printf("Starting replicator @ %s", address)
 	if active {
-		time.AfterFunc(500*time.Millisecond, replicator.Checkpoint)
+		time.AfterFunc(CHECKPOINT_INTERVAL_MS*time.Millisecond, func() { replicator.Checkpoint(false) })
 	}
 	log.Fatal(http.ListenAndServe(address, replicator))
 }
