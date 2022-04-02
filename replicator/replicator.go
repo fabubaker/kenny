@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
@@ -16,9 +17,11 @@ import (
 const CHECKPOINT_INTERVAL_MS = 500
 
 type Replicator struct {
-	criuAddr   *net.UnixAddr
-	dumpReq    []byte
-	restoreReq []byte
+	criuAddr          *net.UnixAddr
+	dumpReq           rpc.CriuReq
+	restoreReq        rpc.CriuReq
+	checkpointDir     string
+	checkpointCounter int
 }
 
 func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicator, error) {
@@ -27,18 +30,12 @@ func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicat
 		return nil, err
 	}
 
-	dir, err := os.Open(checkpointDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// Generate a marshaled dump request
+	// Generate a skeleton for a marshaled dump request
 	dumpOpts := &rpc.CriuOpts{
 		Pid:          proto.Int32(int32(pid)),
 		LogLevel:     proto.Int32(4),
 		LogFile:      proto.String("dump.log"),
 		LeaveRunning: proto.Bool(true),
-		ImagesDirFd:  proto.Int32(int32(dir.Fd())),
 		ShellJob:     proto.Bool(true),
 		TcpClose:     proto.Bool(true),
 	}
@@ -49,18 +46,12 @@ func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicat
 		Opts: dumpOpts,
 	}
 
-	mDumpReq, err := proto.Marshal(&dumpReq)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Generate a marshaled restore request
+	// Generate a skeleton for a marshaled restore request
 	restoreOpts := &rpc.CriuOpts{
-		LogLevel:    proto.Int32(4),
-		LogFile:     proto.String("restore.log"),
-		ImagesDirFd: proto.Int32(int32(dir.Fd())),
-		ShellJob:    proto.Bool(true),
-		TcpClose:    proto.Bool(true),
+		LogLevel: proto.Int32(4),
+		LogFile:  proto.String("restore.log"),
+		ShellJob: proto.Bool(true),
+		TcpClose: proto.Bool(true),
 	}
 
 	restoreType := rpc.CriuReqType_RESTORE
@@ -69,15 +60,12 @@ func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicat
 		Opts: restoreOpts,
 	}
 
-	mRestoreReq, err := proto.Marshal(&restoreReq)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	return &Replicator{
-		criuAddr:   addr,
-		dumpReq:    mDumpReq,
-		restoreReq: mRestoreReq,
+		criuAddr:          addr,
+		dumpReq:           dumpReq,
+		restoreReq:        restoreReq,
+		checkpointDir:     checkpointDir,
+		checkpointCounter: 0,
 	}, nil
 }
 
@@ -113,18 +101,61 @@ func (r *Replicator) sendAndRecv(msg []byte) {
 	}
 }
 
-func (r *Replicator) Checkpoint() {
+// @param iterative: whether to checkpoint iteratively
+func (r *Replicator) Checkpoint(iterative bool) {
 	log.Printf("Checkpointing...")
 
-	r.sendAndRecv(r.dumpReq)
+	r.checkpointCounter++
+	dir := fmt.Sprintf("%s/%d", r.checkpointDir, r.checkpointCounter)
+	err := os.Mkdir(dir, 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	time.AfterFunc(500*time.Millisecond, r.Checkpoint)
+	dirfh, err := os.Open(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	r.dumpReq.Opts.ImagesDirFd = proto.Int32(int32(dirfh.Fd()))
+
+	if iterative {
+		prevDir := fmt.Sprintf("%s/%d", r.checkpointDir, r.checkpointCounter-1)
+		prevDirRel, err := filepath.Rel(dir, prevDir)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		r.dumpReq.Opts.ParentImg = proto.String(prevDirRel)
+	}
+
+	mReq, err := proto.Marshal(&r.dumpReq)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	r.sendAndRecv(mReq)
+
+	time.AfterFunc(CHECKPOINT_INTERVAL_MS*time.Millisecond, func() { r.Checkpoint(false) })
 }
 
 func (r *Replicator) Restore() {
 	log.Printf("Restoring...")
 
-	r.sendAndRecv(r.restoreReq)
+	dir := fmt.Sprintf("%s/%d", r.checkpointDir, r.checkpointCounter)
+	dirfh, err := os.Open(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	r.dumpReq.Opts.ImagesDirFd = proto.Int32(int32(dirfh.Fd()))
+
+	mReq, err := proto.Marshal(&r.dumpReq)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	r.sendAndRecv(mReq)
 }
 
 func (r *Replicator) ServeHTTP(w http.ResponseWriter, req *http.Request) {
