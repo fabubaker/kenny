@@ -5,6 +5,9 @@
 \usepackage{libertine}
 \usepackage{titling}
 
+\newcommand{\bit}{\begin{itemize}}
+\newcommand{\eit}{\end{itemize}}
+
 \setlength{\droptitle}{-5em}
 \pagestyle{plain}
 
@@ -44,15 +47,65 @@ propagated to a secondary VM \cite{Hypervisor, Remus, Scales2010TheDA}. Prior
 work has also looked at how to adapt datastores to run on such VMs to guarantee
 HA \cite{RemusDB}.
 
-In this paper, we present a HA technique for key-value stores using
-container-based checkpoint/restore. Our approach is similar to VM replication,
-except the granularity of replication is at the container-level, rather than the
-VM-level. With the widespread adoption of containers for modern-day computing,
-this technique can be applied to any datastore running in the cloud.
+In this paper, we design and build a key-value store that uses process-based
+checkpoint/restore for active-standby replication. Our approach is similar to VM
+replication, except the granularity of replication is at the process level. In a
+nutshell, we capture regular snapshots of the process state and restore it
+
+\section{Background}
+
+\bit
+  \item In-memory KV stores are used for low-latency, high throughput tasks.
+  \bit
+    \item Eg, web caches, ...
+    \item Eg, Redis, Memcached
+  \eit
+
+  \item These KV stores implement HA through statement-based replication, where
+  commands from the client are executed on the active replica and streamed to
+  the standby.
+  \bit
+    \item For eg, Redis performs this replication asynchronously.
+    \item However, in the case where the standby has disconnected and fallen
+    behind significantly, Redis performs a full synchronization, where it sends
+    a complete copy of the dataset to the standby. Once the standby has loaded
+    the copy, the master streams commands asynchronously to it as before.
+  \eit
+\eit
 
 \section{System Architecture}
 
+\subsection{Overview}
+
+
+
 \section{Evaluation}
+
+For evaluating our system, we are using Yahoo Cloud Serving Benchmark (YCSB)
+because it is the most popular NoSQL benchmark suite. It automates essential
+benchmarking tasks such as workload definition, workload execution and
+performance measurement. For YCSB to work with our key-value (KV) store, some
+intermediary steps had to be followed. Firstly, we had to implement a database
+interface layer. This enables the client to do actions such as "read record" and
+"update record" without needing to understand our database's API. Implementing
+this layer required us to code/fill out the methods specified in the abstract
+class "DB". In particular, we implemented insert, update, read and delete
+methods. For each method, YCSB passes in a table name and record key. As our KV
+store does not have any specific table, so we just ignore that parameter. For
+read methods, YCSB passes in a set of fields to be read and provides a structure
+(Hash Map) to store the returned data in. For write methods, a Hash Map is
+passed in comprising of a key-value pairs. Along with the aforementioned
+methods, we also had to implement the "init()" function where code related to
+database set up was written. Finally, the interface layer and the related
+dependencies were compiled using Maven build automation tool.
+
+\section{Improvements}
+
+\bit
+  \item Shared-disk to shared-nothing
+  \item Buffer responses until replicated for consistency
+  \item CRIU - apply images to process - useful for read-replicas
+\eit
 
 \section{Conclusion}
 
