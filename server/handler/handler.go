@@ -11,12 +11,12 @@ import (
 )
 
 type Handler struct {
-	Store          *store.Store
-	Interval       time.Duration
-	MinChanges     int
-	CurrentPuts    int
-	LastSeenPuts   int
-	ReplicatorAddr string
+	Store                   *store.Store
+	Interval                time.Duration
+	MinChanges              int
+	CurrentChanges          int
+	LastCheckpointedChanges int
+	ReplicatorAddr          string
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -55,7 +55,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		log.Printf("%s %s -> %s", req.Method, key, values)
 		h.Store.Put(key, values)
 
-		h.CurrentPuts++
+		h.CurrentChanges++
 		w.WriteHeader(http.StatusOK)
 	case "DELETE":
 		log.Printf("%s %s", req.Method, key)
@@ -73,7 +73,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (h *Handler) Checkpoint() {
+func (h *Handler) Checkpoint(boot bool) {
+	defer time.AfterFunc(h.Interval, func() { h.Checkpoint(false) })
+
+	// Skip checkpointing if not enough changes have been made since last time.
+	if !boot && h.CurrentChanges-h.LastCheckpointedChanges < h.MinChanges {
+		return
+	}
+
 	log.Printf("Checkpointing to %s", h.ReplicatorAddr)
 
 	base, err := url.Parse(h.ReplicatorAddr + "/checkpoint")
@@ -86,7 +93,7 @@ func (h *Handler) Checkpoint() {
 		log.Println(err)
 	}
 
-	time.AfterFunc(h.Interval*time.Millisecond, h.Checkpoint)
+	h.LastCheckpointedChanges = h.CurrentChanges
 }
 
 func (h *Handler) ReplicatorCheck() error {
