@@ -8,13 +8,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"google.golang.org/protobuf/proto"
 )
-
-const CHECKPOINT_INTERVAL_MS = 500
 
 type Replicator struct {
 	criuAddr          *net.UnixAddr
@@ -127,6 +124,8 @@ func (r *Replicator) Checkpoint(iterative bool) {
 			log.Fatal(err)
 		}
 
+		log.Printf(dir)
+		log.Printf(prevDirRel)
 		r.dumpReq.Opts.ParentImg = proto.String(prevDirRel)
 	}
 
@@ -136,8 +135,6 @@ func (r *Replicator) Checkpoint(iterative bool) {
 	}
 
 	r.sendAndRecv(mReq)
-
-	time.AfterFunc(CHECKPOINT_INTERVAL_MS*time.Millisecond, func() { r.Checkpoint(false) })
 }
 
 func (r *Replicator) Restore() {
@@ -166,6 +163,9 @@ func (r *Replicator) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "/restore":
 		r.Restore()
 		w.WriteHeader(http.StatusOK)
+	case "/checkpoint":
+		r.Checkpoint(true)
+		w.WriteHeader(http.StatusOK)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -188,7 +188,8 @@ func main() {
 
 	log.Printf("Starting replicator @ %s", address)
 	if active {
-		time.AfterFunc(CHECKPOINT_INTERVAL_MS*time.Millisecond, func() { replicator.Checkpoint(false) })
+		log.Printf("Capturing initial dump of PID %d", pid)
+		replicator.Checkpoint(false)
 	}
 	log.Fatal(http.ListenAndServe(address, replicator))
 }
