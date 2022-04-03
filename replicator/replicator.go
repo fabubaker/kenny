@@ -176,12 +176,10 @@ func (r *Replicator) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func main() {
 	pidPtr := flag.Int("pid", 0, "PID of the process to checkpoint")
 	portPtr := flag.String("port", "9090", "Port to listen on")
-	activePtr := flag.Bool("active", true, "Run in active mode")
 	flag.Parse()
 
 	pid := *pidPtr
 	address := ":" + *portPtr
-	active := *activePtr
 
 	replicator, err := MakeReplicator("/tmp/kenny.sock", "/tmp/kenny/checkpoint", pid)
 	if err != nil {
@@ -189,9 +187,5 @@ func main() {
 	}
 
 	log.Printf("Starting replicator @ %s", address)
-	if active {
-		log.Printf("Capturing initial dump of PID %d", pid)
-		replicator.Checkpoint(false)
-	}
 	log.Fatal(http.ListenAndServe(address, replicator))
 }
