@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
@@ -140,20 +141,46 @@ func (r *Replicator) Checkpoint(iterative bool, pid int) {
 func (r *Replicator) Restore() {
 	log.Printf("Restoring...")
 
-	dir := fmt.Sprintf("%s/%d", r.checkpointDir, r.checkpointCounter)
+	file, err := os.Open(r.checkpointDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	names, err := file.Readdirnames(0)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	intNames := []int{}
+
+	for _, name := range names {
+		name, err := strconv.Atoi(name)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		intNames = append(intNames, name)
+	}
+
+	sort.Ints(intNames)
+
+	dir := fmt.Sprintf("%s/%d", r.checkpointDir, intNames[len(intNames)-1])
+	log.Printf("Found last checkpoint at %s", dir)
 	dirfh, err := os.Open(dir)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	r.dumpReq.Opts.ImagesDirFd = proto.Int32(int32(dirfh.Fd()))
+	r.restoreReq.Opts.ImagesDirFd = proto.Int32(int32(dirfh.Fd()))
 
-	mReq, err := proto.Marshal(&r.dumpReq)
+	mReq, err := proto.Marshal(&r.restoreReq)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	r.sendAndRecv(mReq)
+	log.Printf("Restore complete")
 }
 
 func (r *Replicator) ServeHTTP(w http.ResponseWriter, req *http.Request) {
