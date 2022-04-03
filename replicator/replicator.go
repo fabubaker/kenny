@@ -6,8 +6,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/checkpoint-restore/go-criu/v5/rpc"
 	"google.golang.org/protobuf/proto"
@@ -21,7 +23,7 @@ type Replicator struct {
 	checkpointCounter int
 }
 
-func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicator, error) {
+func MakeReplicator(socketPath string, checkpointDir string) (*Replicator, error) {
 	addr, err := net.ResolveUnixAddr("unixpacket", socketPath)
 	if err != nil {
 		return nil, err
@@ -29,7 +31,6 @@ func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicat
 
 	// Generate a skeleton for a marshaled dump request
 	dumpOpts := &rpc.CriuOpts{
-		Pid:          proto.Int32(int32(pid)),
 		LogLevel:     proto.Int32(4),
 		LogFile:      proto.String("dump.log"),
 		LeaveRunning: proto.Bool(true),
@@ -100,7 +101,7 @@ func (r *Replicator) sendAndRecv(msg []byte) {
 }
 
 // @param iterative: whether to checkpoint iteratively
-func (r *Replicator) Checkpoint(iterative bool) {
+func (r *Replicator) Checkpoint(iterative bool, pid int) {
 	log.Printf("Checkpointing...")
 
 	r.checkpointCounter++
@@ -115,6 +116,7 @@ func (r *Replicator) Checkpoint(iterative bool) {
 		log.Fatal(err)
 	}
 
+	r.dumpReq.Opts.Pid = proto.Int32(int32(pid))
 	r.dumpReq.Opts.ImagesDirFd = proto.Int32(int32(dirfh.Fd()))
 
 	if iterative {
@@ -124,8 +126,6 @@ func (r *Replicator) Checkpoint(iterative bool) {
 			log.Fatal(err)
 		}
 
-		log.Printf(dir)
-		log.Printf(prevDirRel)
 		r.dumpReq.Opts.ParentImg = proto.String(prevDirRel)
 	}
 
@@ -157,14 +157,27 @@ func (r *Replicator) Restore() {
 }
 
 func (r *Replicator) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	log.Printf("Received request: %s", req.URL.Path)
+	log.Printf("Received request: %s", req.RequestURI)
 
 	switch req.URL.Path {
 	case "/restore":
 		r.Restore()
 		w.WriteHeader(http.StatusOK)
 	case "/checkpoint":
-		r.Checkpoint(true)
+		queryMap, err := url.ParseQuery(req.URL.RawQuery)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pid, err := strconv.Atoi(queryMap.Get("pid"))
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		iterative := queryMap.Get("iterative") == "true"
+
+		r.Checkpoint(iterative, pid)
 		w.WriteHeader(http.StatusOK)
 	case "/heartbeat":
 		w.WriteHeader(http.StatusOK)
@@ -174,14 +187,12 @@ func (r *Replicator) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	pidPtr := flag.Int("pid", 0, "PID of the process to checkpoint")
 	portPtr := flag.String("port", "9090", "Port to listen on")
 	flag.Parse()
 
-	pid := *pidPtr
 	address := ":" + *portPtr
 
-	replicator, err := MakeReplicator("/tmp/kenny.sock", "/tmp/kenny/checkpoint", pid)
+	replicator, err := MakeReplicator("/tmp/kenny.sock", "/tmp/kenny/checkpoint")
 	if err != nil {
 		log.Fatal(err)
 	}
