@@ -5,16 +5,18 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"strconv"
+	"time"
 
 	"github.com/fabubaker/kenny/server/store"
 )
 
 type Handler struct {
-	Store        *store.Store
-	CurrentPuts  int
-	LastSeenPuts int
+	Store          *store.Store
+	Interval       time.Duration
+	MinChanges     int
+	CurrentPuts    int
+	LastSeenPuts   int
+	ReplicatorAddr string
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -71,20 +73,32 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (h *Handler) Checkpoint(replicatorAddr string) {
-	log.Printf("Checkpointing to %s", replicatorAddr)
+func (h *Handler) Checkpoint() {
+	log.Printf("Checkpointing to %s", h.ReplicatorAddr)
 
-	base, err := url.Parse(replicatorAddr + "/checkpoint")
+	base, err := url.Parse(h.ReplicatorAddr + "/checkpoint")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	params := url.Values{}
-	params.Add("pid", strconv.Itoa(os.Getpid()))
-	base.RawQuery = params.Encode()
 
 	_, err = http.Post(base.String(), "application/json", nil)
 	if err != nil {
 		log.Println(err)
 	}
+
+	time.AfterFunc(h.Interval*time.Millisecond, h.Checkpoint)
+}
+
+func (h *Handler) ReplicatorCheck() error {
+	base, err := url.Parse(h.ReplicatorAddr + "/heartbeat")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = http.Get(base.String())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
