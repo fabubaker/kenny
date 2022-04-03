@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/fabubaker/kenny/server/store"
@@ -73,20 +75,27 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (h *Handler) Checkpoint(boot bool) {
-	defer time.AfterFunc(h.Interval, func() { h.Checkpoint(false) })
+func (h *Handler) Checkpoint(iterative bool) {
+	defer time.AfterFunc(h.Interval, func() { h.Checkpoint(true) })
 
 	// Skip checkpointing if not enough changes have been made since last time.
-	if !boot && h.CurrentChanges-h.LastCheckpointedChanges < h.MinChanges {
+	if iterative && h.CurrentChanges-h.LastCheckpointedChanges < h.MinChanges {
 		return
 	}
 
 	log.Printf("Checkpointing to %s", h.ReplicatorAddr)
 
+	pid := os.Getpid()
+
 	base, err := url.Parse(h.ReplicatorAddr + "/checkpoint")
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	params := url.Values{}
+	params.Add("pid", fmt.Sprintf("%d", pid))
+	params.Add("iterative", fmt.Sprintf("%t", iterative))
+	base.RawQuery = params.Encode()
 
 	_, err = http.Post(base.String(), "application/json", nil)
 	if err != nil {

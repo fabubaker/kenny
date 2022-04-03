@@ -47,7 +47,8 @@ func main() {
 	}
 
 	// Create an initial dump, then subsequent checkpoints are iteratively captured.
-	handler.Checkpoint(true)
+	iterative := false
+	handler.Checkpoint(iterative)
 
 	log.Printf("Starting server @ %s", address)
 	log.Fatal(http.ListenAndServe(address, handler))
