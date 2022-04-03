@@ -15,7 +15,9 @@ func main() {
 	}
 
 	handler := &handler.Handler{
-		Store: store,
+		Store:        store,
+		CurrentPuts:  0,
+		LastSeenPuts: 0,
 	}
 
 	portPtr := flag.String("port", "8080", "Port to listen on")

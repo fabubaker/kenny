@@ -12,7 +12,9 @@ import (
 )
 
 type Handler struct {
-	Store *store.Store
+	Store        *store.Store
+	CurrentPuts  int
+	LastSeenPuts int
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -51,6 +53,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		log.Printf("%s %s -> %s", req.Method, key, values)
 		h.Store.Put(key, values)
 
+		h.CurrentPuts++
 		w.WriteHeader(http.StatusOK)
 	case "DELETE":
 		log.Printf("%s %s", req.Method, key)
