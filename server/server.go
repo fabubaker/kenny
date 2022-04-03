@@ -35,17 +35,6 @@ func main() {
 
 	address := ":" + *portPtr
 
-	log.Printf("Checking if replicator is up at %s", handler.ReplicatorAddr)
-	for alive := false; !alive; {
-		err := handler.ReplicatorCheck()
-		if err == nil {
-			alive = true
-		} else {
-			log.Printf("Replicator not alive, retrying in %d seconds", REPLICATOR_CHECK_RETRY_INTERVAL)
-			time.Sleep(REPLICATOR_CHECK_RETRY_INTERVAL * time.Second)
-		}
-	}
-
 	// Create an initial dump, then subsequent checkpoints are iteratively captured.
 	iterative := false
 	handler.Checkpoint(iterative)
