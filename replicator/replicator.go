@@ -215,11 +215,12 @@ func (r *Replicator) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func main() {
 	portPtr := flag.String("port", "9090", "Port to listen on")
+	checkpointPathPtr := flag.String("checkpoint-path", "/tmp/kenny/checkpoint", "Path to checkpoint directory")
 	flag.Parse()
 
 	address := ":" + *portPtr
 
-	replicator, err := MakeReplicator("/tmp/kenny.sock", "/tmp/kenny/checkpoint")
+	replicator, err := MakeReplicator("/tmp/kenny.sock", *checkpointPathPtr)
 	if err != nil {
 		log.Fatal(err)
 	}
