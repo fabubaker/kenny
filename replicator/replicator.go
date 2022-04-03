@@ -166,6 +166,8 @@ func (r *Replicator) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "/checkpoint":
 		r.Checkpoint(true)
 		w.WriteHeader(http.StatusOK)
+	case "/heartbeat":
+		w.WriteHeader(http.StatusOK)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
