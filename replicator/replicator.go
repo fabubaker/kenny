@@ -38,6 +38,7 @@ func MakeReplicator(socketPath string, checkpointDir string, pid int) (*Replicat
 		LeaveRunning: proto.Bool(true),
 		ShellJob:     proto.Bool(true),
 		TcpClose:     proto.Bool(true),
+		TrackMem:     proto.Bool(true),
 	}
 
 	dumpType := rpc.CriuReqType_DUMP
