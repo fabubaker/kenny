@@ -63,7 +63,7 @@
   \begin{itemize}
     \item Linux utility to checkpoint/restore in-memory state of a process/container. \pause
     \item A running application can be checkpointed to persistent storage as a set of files. \pause
-    \item The application can be then restored from the point it was frozen
+    \item The application can be then restored back to the point it was frozen
     using the checkpoint files. \pause
     \item Integrated with container runtimes such as OpenVZ, LXC/LXD, Docker, Podman, etc.
     \item Commonly used for container live-migration.
@@ -113,11 +113,12 @@
     \item Each workload consists of 1000 operations.
     \item Workload A: 50/50 read/write mix.
     \item Workload B: 95/5 read/write mix.
+    \item Snapshots were captured after every 250 updates.
   \end{itemize}
 \end{frame}
 
 \begin{frame}{Evaluation}
-  \framesubtitle{Storage Performance vs Redis}
+  \framesubtitle{Storage Performance vs Redis (No Replication)}
 
   \begin{columns}
     \column{0.5\textwidth}
