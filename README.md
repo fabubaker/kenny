@@ -1,8 +1,7 @@
-## Running
+# kenny
 
-### Running the server
+A prototype key-value store that uses [CRIU](https://criu.org/Main_Page) for
+replication.
 
-```
-go build -o server ./server/server.go
-./server/server
-```
+Read the [paper](./docs/paper/paper.pdf) or the
+[slides](./docs/slides/slides.pdf) for more details.
